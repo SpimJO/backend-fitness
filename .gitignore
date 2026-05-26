@@ -1,0 +1,17 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# virtualenvs
+venv/
+.venv/
+env/
+backend/venv/
+backend/.venv/
+
+# local env files (never commit secrets)
+.env
+.env.local
+.env.*.local
