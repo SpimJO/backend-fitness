@@ -193,9 +193,20 @@ def seed_reward_catalog():
         db.session.commit()
 
 
-def _item_to_catalog_dict(item: RewardItem) -> dict:
+def _user_redeemed_item_ids(user_id: int) -> set[int]:
+    rows = (
+        db.session.query(RewardRedemption.reward_item_id)
+        .filter(RewardRedemption.user_id == user_id)
+        .distinct()
+        .all()
+    )
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
+def _item_to_catalog_dict(item: RewardItem, redeemed_ids: set[int] | None = None) -> dict:
     data = item.to_dict()
     data["redeem_message"] = resolve_redeem_message(item)
+    data["already_redeemed"] = item.id in (redeemed_ids or set())
     return data
 
 
@@ -363,11 +374,13 @@ def rewards_catalog():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     default_message = get_default_redeem_message()
+    redeemed_ids = _user_redeemed_item_ids(user_id) if user else set()
     return jsonify(
         {
-            "items": [_item_to_catalog_dict(i) for i in items],
+            "items": [_item_to_catalog_dict(i, redeemed_ids) for i in items],
             "total_points": int(user.total_points or 0) if user else 0,
             "default_redeem_message": default_message,
+            "redeemed_item_ids": sorted(redeemed_ids),
         }
     ), 200
 
@@ -401,6 +414,11 @@ def rewards_redeem():
     item = RewardItem.query.filter_by(id=int(item_id), is_active=True).first()
     if not item:
         return jsonify({"message": "reward not found"}), 404
+
+    if RewardRedemption.query.filter_by(
+        user_id=user.id, reward_item_id=item.id
+    ).first():
+        return jsonify({"message": "You already redeemed this reward"}), 409
 
     cost = int(item.points_cost or 0)
     balance = int(user.total_points or 0)
