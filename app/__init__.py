@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
+from sqlalchemy import text
 
 from config import Config
 
@@ -88,14 +89,23 @@ def create_app():
   
     @app.route("/api/health")
     def health():
-        return {"status": "ok"}
+        payload = {
+            "status": "ok",
+            "database": Config.database_label(),
+        }
+        try:
+            db.session.execute(text("SELECT 1"))
+            payload["db_connected"] = True
+        except Exception as exc:
+            payload["db_connected"] = False
+            payload["db_error"] = str(exc)
+        return jsonify(payload), 200
 
     # -----------------------------
-    # DB init
+    # DB init (PostgreSQL on Render: tables + seed data)
     # -----------------------------
     with app.app_context():
-        # Import models so create_all registers all tables
-        from .models.rewards import RewardItem, RewardRedemption  # noqa: F401
+        from . import models  # noqa: F401 — register all tables with SQLAlchemy
 
         db.create_all()
 

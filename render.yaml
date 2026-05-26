@@ -1,18 +1,24 @@
-# Render Blueprint for the fitquest backend
-# Docs: https://render.com/docs/blueprint-spec
-# This file lives at the ROOT of the backend repo (rmr001/fitquest-backend-v2).
+# Render Blueprint — FitQuest API (PostgreSQL)
+# https://render.com/docs/blueprint-spec
+#
+# Deploy options:
+#   A) This folder IS the Git repo root → use as-is.
+#   B) Monorepo (fitquest repo) → in Render Dashboard set Root Directory = "backend"
+#      OR move this file to the repo root and add: rootDir: backend
 
 databases:
   - name: fitquest-db
     databaseName: fitquest
     user: fitquest
     plan: free
+    region: oregon
 
 services:
   - type: web
-    name: fitquest-backend
+    name: fitquest-api
     runtime: python
     plan: free
+    region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 wsgi:app
     healthCheckPath: /api/health
@@ -27,6 +33,5 @@ services:
         generateValue: true
       - key: PYTHON_VERSION
         value: "3.11.9"
-      # Gemini key — value NOT stored in git. Render will prompt on first deploy.
       - key: GEMINI_API_KEY
         sync: false
