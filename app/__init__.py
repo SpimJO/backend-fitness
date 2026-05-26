@@ -114,4 +114,8 @@ def create_app():
         seed_achievements()
         seed_reward_catalog()
 
+        from .routes.rewards_routes import ensure_reward_schema
+
+        ensure_reward_schema()
+
     return app

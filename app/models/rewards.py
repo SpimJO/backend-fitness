@@ -14,6 +14,7 @@ class RewardItem(db.Model):
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.String(255))
     points_cost = db.Column(db.Integer, nullable=False)
+    redeem_message = db.Column(db.String(255))
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
@@ -24,8 +25,22 @@ class RewardItem(db.Model):
             "name": self.name,
             "description": self.description,
             "points_cost": int(self.points_cost or 0),
+            "redeem_message": self.redeem_message,
             "is_active": bool(self.is_active),
         }
+
+
+class RewardShopSettings(db.Model):
+    """Singleton-style shop config (default redeem toast, etc.)."""
+
+    __tablename__ = "reward_shop_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    default_redeem_message = db.Column(
+        db.String(255),
+        nullable=False,
+        default="Go to the counter to redeem the reward",
+    )
 
 
 class RewardRedemption(db.Model):
@@ -47,6 +62,7 @@ class RewardRedemption(db.Model):
         return {
             "id": self.id,
             "reward_item_id": self.reward_item_id,
+            "code": item.code if item else None,
             "name": item.name if item else "Reward",
             "points_spent": int(self.points_spent or 0),
             "redeemed_at": self.redeemed_at.isoformat() if self.redeemed_at else None,

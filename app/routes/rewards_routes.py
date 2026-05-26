@@ -5,9 +5,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from .. import db
 from ..models.user import User
 from ..models.social import Achievement, UserAchievement
-from ..models.rewards import RewardItem, RewardRedemption
+from ..models.rewards import RewardItem, RewardRedemption, RewardShopSettings
 
 rewards_bp = Blueprint("rewards", __name__)
+
+DEFAULT_REDEEM_MESSAGE = "Go to the counter to redeem the reward"
 
 DEFAULT_ACHIEVEMENTS = [
     {
@@ -91,6 +93,7 @@ DEFAULT_REWARD_ITEMS = [
         "name": "Gym Day Pass",
         "description": "One full day access to partner gym facilities.",
         "points_cost": 1000,
+        "redeem_message": "Go to the counter to redeem the reward",
         "sort_order": 1,
     },
     {
@@ -98,6 +101,7 @@ DEFAULT_REWARD_ITEMS = [
         "name": "1 hr Treadmill",
         "description": "One hour on the treadmill at a partner gym.",
         "points_cost": 500,
+        "redeem_message": "Go to the counter to redeem the reward",
         "sort_order": 2,
     },
     {
@@ -105,9 +109,56 @@ DEFAULT_REWARD_ITEMS = [
         "name": "Protein Shake",
         "description": "Redeem a post-workout protein shake.",
         "points_cost": 250,
+        "redeem_message": "Go to the counter to redeem the reward",
         "sort_order": 3,
     },
 ]
+
+
+def ensure_reward_schema():
+    """Add new reward columns/tables on existing PostgreSQL DBs (safe to re-run)."""
+    from sqlalchemy import inspect, text
+
+    try:
+        insp = inspect(db.engine)
+        if "reward_items" in insp.get_table_names():
+            cols = {c["name"] for c in insp.get_columns("reward_items")}
+            if "redeem_message" not in cols:
+                db.session.execute(
+                    text(
+                        "ALTER TABLE reward_items "
+                        "ADD COLUMN redeem_message VARCHAR(255)"
+                    )
+                )
+                db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def get_default_redeem_message() -> str:
+    row = RewardShopSettings.query.get(1)
+    if row and row.default_redeem_message:
+        return row.default_redeem_message.strip()
+    return DEFAULT_REDEEM_MESSAGE
+
+
+def resolve_redeem_message(item: RewardItem) -> str:
+    custom = (item.redeem_message or "").strip()
+    if custom:
+        return custom
+    return get_default_redeem_message()
+
+
+def seed_reward_shop_settings():
+    row = RewardShopSettings.query.get(1)
+    if not row:
+        db.session.add(
+            RewardShopSettings(
+                id=1,
+                default_redeem_message=DEFAULT_REDEEM_MESSAGE,
+            )
+        )
+        db.session.commit()
 
 
 def seed_achievements():
@@ -123,12 +174,29 @@ def seed_achievements():
 
 
 def seed_reward_catalog():
-    """Ensure default shop items exist (safe to call on every app start)."""
-    if RewardItem.query.count() > 0:
-        return
-    for item in DEFAULT_REWARD_ITEMS:
-        db.session.add(RewardItem(**item))
-    db.session.commit()
+    """Ensure default shop items exist and sync redeem messages from seed data."""
+    ensure_reward_schema()
+    seed_reward_shop_settings()
+
+    changed = False
+    for row in DEFAULT_REWARD_ITEMS:
+        existing = RewardItem.query.filter_by(code=row["code"]).first()
+        if existing:
+            if not existing.redeem_message and row.get("redeem_message"):
+                existing.redeem_message = row["redeem_message"]
+                changed = True
+            continue
+        db.session.add(RewardItem(**row))
+        changed = True
+
+    if changed:
+        db.session.commit()
+
+
+def _item_to_catalog_dict(item: RewardItem) -> dict:
+    data = item.to_dict()
+    data["redeem_message"] = resolve_redeem_message(item)
+    return data
 
 
 def _sync_user_level(user: User) -> None:
@@ -294,10 +362,12 @@ def rewards_catalog():
     )
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
+    default_message = get_default_redeem_message()
     return jsonify(
         {
-            "items": [i.to_dict() for i in items],
+            "items": [_item_to_catalog_dict(i) for i in items],
             "total_points": int(user.total_points or 0) if user else 0,
+            "default_redeem_message": default_message,
         }
     ), 200
 
@@ -348,6 +418,7 @@ def rewards_redeem():
 
     user.total_points = balance - cost
     _sync_user_level(user)
+    toast_message = resolve_redeem_message(item)
     redemption = RewardRedemption(
         user_id=user.id,
         reward_item_id=item.id,
@@ -360,8 +431,10 @@ def rewards_redeem():
         jsonify(
             {
                 "message": "Reward redeemed",
+                "toast_message": toast_message,
                 "redemption": redemption.to_dict(),
                 "total_points": int(user.total_points or 0),
+                "level": int(user.level or 1),
             }
         ),
         201,

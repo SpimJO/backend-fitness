@@ -92,9 +92,19 @@ CREATE TABLE IF NOT EXISTS reward_items (
   name VARCHAR(120) NOT NULL,
   description VARCHAR(255),
   points_cost INTEGER NOT NULL,
+  redeem_message VARCHAR(255),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS reward_shop_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  default_redeem_message VARCHAR(255) NOT NULL DEFAULT 'Go to the counter to redeem the reward'
+);
+
+INSERT INTO reward_shop_settings (id, default_redeem_message)
+VALUES (1, 'Go to the counter to redeem the reward')
+ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS reward_redemptions (
   id BIGSERIAL PRIMARY KEY,
@@ -217,11 +227,16 @@ VALUES
 ON CONFLICT (code) DO NOTHING;
 
 -- ---------- Seed: reward shop ----------
-INSERT INTO reward_items (code, name, description, points_cost, is_active, sort_order)
+INSERT INTO reward_items (code, name, description, points_cost, redeem_message, is_active, sort_order)
 VALUES
-  ('gym_day_pass', 'Gym Day Pass', 'One full day access to partner gym facilities.', 1000, TRUE, 1),
-  ('treadmill_1hr', '1 hr Treadmill', 'One hour on the treadmill at a partner gym.', 500, TRUE, 2),
-  ('protein_shake', 'Protein Shake', 'Redeem a post-workout protein shake.', 250, TRUE, 3)
+  ('gym_day_pass', 'Gym Day Pass', 'One full day access to partner gym facilities.', 1000, 'Go to the counter to redeem the reward', TRUE, 1),
+  ('treadmill_1hr', '1 hr Treadmill', 'One hour on the treadmill at a partner gym.', 500, 'Go to the counter to redeem the reward', TRUE, 2),
+  ('protein_shake', 'Protein Shake', 'Redeem a post-workout protein shake.', 250, 'Go to the counter to redeem the reward', TRUE, 3)
 ON CONFLICT (code) DO NOTHING;
+
+-- Backfill redeem_message on existing rows (safe if column was added later)
+UPDATE reward_items
+SET redeem_message = 'Go to the counter to redeem the reward'
+WHERE redeem_message IS NULL OR redeem_message = '';
 
 -- Done. Check Table Editor for: users, achievements, reward_items, reward_redemptions, workouts

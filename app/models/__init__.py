@@ -14,7 +14,7 @@ from .social import (
     PoseMetric,
     UserAchievement,
 )
-from .rewards import RewardItem, RewardRedemption
+from .rewards import RewardItem, RewardRedemption, RewardShopSettings
 
 __all__ = [
     "User",
@@ -32,4 +32,5 @@ __all__ = [
     "GlobalLeaderboard",
     "RewardItem",
     "RewardRedemption",
+    "RewardShopSettings",
 ]

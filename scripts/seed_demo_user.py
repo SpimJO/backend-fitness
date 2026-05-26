@@ -164,7 +164,7 @@ def main() -> None:
                 )
             )
 
-        demo.total_points = total_points + 175
+        demo.total_points = total_points + 175 + 4500
         demo.level = max(1, (demo.total_points // 1000) + 1)
 
         unlock_codes = ["first_workout", "workouts_5", "reps_100", "streak_3", "points_500"]
