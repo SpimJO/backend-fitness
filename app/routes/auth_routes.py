@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import OperationalError
 
 from .. import db
@@ -86,10 +86,11 @@ def login():
     if not identifier or not password:
         return jsonify({"message": "identifier and password are required"}), 400
 
+    ident_lower = identifier.lower()
     user = User.query.filter(
         or_(
-            User.email == identifier.lower(),
-            User.username == identifier,
+            User.email == ident_lower,
+            func.lower(User.username) == ident_lower,
         )
     ).first()
 
